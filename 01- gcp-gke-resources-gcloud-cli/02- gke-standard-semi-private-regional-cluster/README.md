@@ -1,4 +1,4 @@
-# GKE Standard Semi Private Zonal Clusters
+# GKE Standard Semi Private Regional Clusters
 
 
 ## How cluster network isolation works
@@ -34,26 +34,6 @@ All nodes in a cluster with only private nodes are created without an external I
 
 Private Google Access is enabled automatically when you create a cluster unless you are using Shared VPC. You must not disable Private Google Access unless you are using NAT to access the internet.
 
-## What this does?
-
-This document shows how to create a Standard regional cluster to increase availability of the cluster's control plane and workloads during cluster upgrades, automated maintenance, or a zonal disruption.
-
-
-## Single-zone versus multi-zonal
-A single-zone cluster has a single control plane running in one zone. This control plane manages workloads on nodes running in the same zone. If you run a workload in a single zone, this workload is unavailable in the event of a zonal outage.
-
-A multi-zonal cluster's nodes run in multiple zones, but it has only a single replica of the control plane. If you run a workload in multiple zones and there is a zonal outage, the workload is disrupted in that zone but remains available in other zones.
-
-If you need higher availability for the control plane, consider creating a regional cluster instead. In a regional cluster, the control plane is replicated across multiple zones in a region.
-
-After you create a cluster, you cannot change it from zonal to regional, or regional to zonal.
-
-## Create a zonal cluster
-
-The minimum information that you need to specify when creating a new zonal cluster is a name, project (usually the current project), and zone (usually the default location for command line tools), using the default settings for all other values. However, there are more possible configuration settings, only some of which are described in this section and some of which can't be changed after cluster creation. Ensure that you understand which settings can't be changed after cluster creation, and that you choose the right setting when creating a cluster if you don't want to have to create it again.
-
-You can see an overview of cluster configuration options in About cluster configuration choices, and a complete list of possible options in the gcloud container clusters create and Terraform google_container_cluster reference guides.
-
 ### Semi Private Cluster 
 
 ```
@@ -66,7 +46,7 @@ gcloud config set compute/zone us-central1-c
 ```
 
 gcloud container clusters create private-cluster1 \
-     --zone us-central1-c  \
+    --region us-central1 \
     --tier standard \
     --labels=env=prod-cluster,team=it \
     --node-locations us-central1-c,us-central1-f \
@@ -105,7 +85,7 @@ gcloud container clusters create private-cluster1 \
     --enable-managed-prometheus \
     --enable-shielded-nodes \
     --no-enable-basic-auth \
-    --workload-pool dev-project-786111.svc.id.goog  \
+    --workload-pool dev-project-786111.svc.id.goog \
     --no-issue-client-certificate
 
 
@@ -132,8 +112,9 @@ enable-master-global-access: Allows access from IP addresses in other Google Clo
 #### Get Cluster Detail
 
 ```
+
 gcloud container clusters list
-gcloud container clusters describe public-cluster1 --zone us-central1-c
+gcloud container clusters describe private-cluster1 --region us-central1
 
 ```
 
@@ -142,7 +123,7 @@ gcloud container clusters describe public-cluster1 --zone us-central1-c
 ```
 
 gcloud container clusters describe private-cluster1 \
-   --location=us-central1-c \
+   --location=us-central1 \
    --format="yaml(network, privateClusterConfig)"
 
 ```   
@@ -151,7 +132,7 @@ gcloud container clusters describe private-cluster1 \
 
 ```
 
-gcloud container clusters describe private-cluster1 --format "flattened(masterAuthorizedNetworksConfig.cidrBlocks[])" --zone us-central1-c  
+gcloud container clusters describe private-cluster1 --format "flattened(masterAuthorizedNetworksConfig.cidrBlocks[])" --region us-central1  
 
 ```
 
@@ -159,11 +140,11 @@ gcloud container clusters describe private-cluster1 --format "flattened(masterAu
 
 ```
 gcloud container clusters update private-cluster1 \
-    --zone us-central1-c \
+    --region us-central1 \
     --enable-master-authorized-networks \
-    --master-authorized-networks 39.45.110.82/32,172.21.1.0/24
+    --master-authorized-networks 39.45.110.82/32,172.21.5.0/24
 
-gcloud container clusters describe private-cluster1 --format "flattened(masterAuthorizedNetworksConfig.cidrBlocks[])" --zone us-central1-c      
+gcloud container clusters describe private-cluster1 --format "flattened(masterAuthorizedNetworksConfig.cidrBlocks[])" --region us-central1      
 
 ```
 
@@ -171,7 +152,7 @@ gcloud container clusters describe private-cluster1 --format "flattened(masterAu
 
 ```
 gcloud container clusters describe private-cluster1 \
-  --zone us-central1-c   \
+  --region us-central1   \
   --format json     
 
 ```
@@ -179,14 +160,13 @@ gcloud container clusters describe private-cluster1 \
 #### Enable Autoscalling for Cluster
 
 ```
-gcloud container node-pools list --cluster private-cluster1 --zone us-cent
-ral1-c
+gcloud container node-pools list --cluster private-cluster1 --region us-central1
 
-gcloud container node-pools describe default-pool --cluster private-cluster1 --zone us-central1-c
+gcloud container node-pools describe default-pool --cluster private-cluster1 --region us-central1
 
 gcloud container clusters update private-cluster1 \
     --enable-autoscaling \
-    --zone us-central1-c \
+    --region us-central1 \
     --node-pool  default-pool \
     --min-nodes 1  \
     --max-nodes 2 \
@@ -197,14 +177,12 @@ gcloud container clusters update private-cluster1 \
 #### Connect GKE Cluster
 
 ```
+
 gcloud container clusters list
 
-gcloud container clusters get-credentials private-cluster1 --zone us-central1-c --project dev-project-786111 --internal-ip  
+gcloud container clusters get-credentials private-cluster1 --region us-central1 --project dev-project-786111 --internal-ip     
 
 ```
-
-
-
 
 
 ### Delete Clusters
@@ -212,14 +190,13 @@ gcloud container clusters get-credentials private-cluster1 --zone us-central1-c 
 ```
 gcloud container clusters list
 
-gcloud container clusters delete private-cluster1 --zone us-central1-c
-
+gcloud container clusters delete private-cluster1 --region us-central1
 
 ```
 
 ### NatGW for Private Nodes in GKE:
 
-#### Cloud NAT for Region 1
+#### Cloud NAT for Region US-Central1
 
 ```
 gcloud compute addresses create natgw-gke-pip-us-central1  \
@@ -252,7 +229,7 @@ gcloud compute routers nats create gke-natgw-us-central1 \
     --router gke-nat-router-us-central1 \
     --region us-central1 \
     --nat-external-ip-pool natgw-gke-pip-us-central1 \
-    --nat-custom-subnet-ip-ranges k8s-vpc-subnet-us-central1 \
+    --nat-custom-subnet-ip-ranges k8s-sub1-us-central1 \
     --min-ports-per-vm 128 \
     --max-ports-per-vm 512 \
     --enable-logging

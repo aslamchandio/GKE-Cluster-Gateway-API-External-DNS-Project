@@ -1,4 +1,4 @@
-# GKE Standard Semi Private Regional Clusters
+# GKE Standard Private Regional Clusters
 
 
 ## How cluster network isolation works
@@ -34,7 +34,7 @@ All nodes in a cluster with only private nodes are created without an external I
 
 Private Google Access is enabled automatically when you create a cluster unless you are using Shared VPC. You must not disable Private Google Access unless you are using NAT to access the internet.
 
-### Semi Private Cluster 
+### Private Cluster 
 
 ```
 gcloud config set accessibility/screen_reader false
@@ -42,6 +42,9 @@ gcloud config set compute/region us-central
 gcloud config set compute/zone us-central1-c
 
 ```
+### Enable Private Endpoint
+
+enable-private-endpoint: Specifies that access to the external endpoint is disabled. Omit this flag if you want to allow access to the control plane from external IP addresses. In this case, we strongly recommend that you control access to the external endpoint with the enable-master-authorized-networks flag.
 
 ```
 
@@ -49,23 +52,23 @@ gcloud container clusters create private-cluster1 \
     --region us-central1 \
     --tier standard \
     --labels=env=prod-cluster,team=it \
-    --node-locations us-central1-c,us-central1-f \
+    --node-locations us-central1-b,us-central1-f \
     --release-channel "regular" \
-    --cluster-version 1.31.6-gke.1064000 \
+    --cluster-version 1.31.6-gke.1020000 \
     --num-nodes 1 \
     --enable-master-authorized-networks \
-    --master-authorized-networks 172.22.4.15/32,39.51.108.78/32 \
+    --master-authorized-networks 172.22.4.15/32 \
     --enable-authorized-networks-on-private-endpoint \
     --private-endpoint-subnetwork k8s-master-sub1-us-central1 \
     --network k8s-vpc \
     --subnetwork k8s-sub1-us-central1  \
-    --cluster-secondary-range-name pod-cidr1 \
+    --cluster-secondary-range-name pod-cidr2 \
     --services-secondary-range-name service-cidr \
     --enable-private-nodes \
     --enable-ip-alias \
     --enable-master-global-access \
     --enable-dns-access \
-    --enable-google-cloud-access \
+    --enable-private-endpoint \
     --gateway-api standard \
     --machine-type e2-medium \
     --enable-shielded-nodes \
@@ -83,7 +86,7 @@ gcloud container clusters create private-cluster1 \
     --max-surge-upgrade 1 \
     --max-unavailable-upgrade 0 \
     --enable-managed-prometheus \
-    --enable-shielded-nodes \
+    --enable-shielded-node \
     --no-enable-basic-auth \
     --workload-pool dev-project-786111.svc.id.goog \
     --no-issue-client-certificate
@@ -108,6 +111,8 @@ enable-authorized-networks-on-private-endpoint: Specifies that access to the int
 no-enable-google-cloud-access: Denies access to the control plane from Google Cloud external IP addresses.
 
 enable-master-global-access: Allows access from IP addresses in other Google Cloud regions.
+
+enable-private-endpoint: Specifies that access to the external endpoint is disabled. Omit this flag if you want to allow access to the control plane from external IP addresses. In this case, we strongly recommend that you control access to the external endpoint with the enable-master-authorized-networks flag.
 
 #### Get Cluster Detail
 
@@ -142,18 +147,9 @@ gcloud container clusters describe private-cluster1 --format "flattened(masterAu
 gcloud container clusters update private-cluster1 \
     --region us-central1 \
     --enable-master-authorized-networks \
-    --master-authorized-networks 39.45.110.82/32,172.21.5.0/24
+    --master-authorized-networks 172.22.4.10/32,172.22.2.20/32
 
 gcloud container clusters describe private-cluster1 --format "flattened(masterAuthorizedNetworksConfig.cidrBlocks[])" --region us-central1      
-
-```
-
-#### Confirm the Gateway API is enabled in the GKE control plane
-
-```
-gcloud container clusters describe private-cluster1 \
-  --region us-central1   \
-  --format json     
 
 ```
 
@@ -174,7 +170,153 @@ gcloud container clusters update private-cluster1 \
 
 ```
 
-#### Connect GKE Cluster
+### Create VM in Google Cloud with Custom Service Account
+
+#### Service Account
+
+```
+ 
+gcloud iam service-accounts create SA_NAME \
+    --description="DESCRIPTION" \
+    --display-name="DISPLAY_NAME"
+
+gcloud iam service-accounts create gke-sa \
+    --description="GKE Service Account" \
+    --display-name="GKE SA"
+
+gcloud iam service-accounts list
+
+gcloud iam service-accounts describe gke-sa@dev-project-786111.iam.gserviceaccount.com
+
+```
+
+#### Service Account membership
+
+```
+
+gcloud projects add-iam-policy-binding dev-project-786111 \
+  --member="serviceAccount:gke-sa@dev-project-786111.iam.gserviceaccount.com" \
+  --role="roles/monitoring.metricWriter"
+  --condition None
+
+
+gcloud projects add-iam-policy-binding dev-project-786111 \
+  --member="serviceAccount:gke-sa@dev-project-786111.iam.gserviceaccount.com" \
+  --role="roles/logging.logWriter"
+  --condition None
+
+gcloud projects add-iam-policy-binding dev-project-786111 \
+  --member="serviceAccount:gke-sa@dev-project-786111.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser" \
+  --condition None
+
+gcloud projects add-iam-policy-binding dev-project-786111 \
+  --member="serviceAccount:gke-sa@dev-project-786111.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.repoAdmin" \
+  --condition None
+
+  gcloud projects add-iam-policy-binding dev-project-786111 \
+  --member="serviceAccount:gke-sa@dev-project-786111.iam.gserviceaccount.com" \
+  --role="roles/container.clusterViewer" \
+  --condition None
+
+gcloud projects add-iam-policy-binding dev-project-786111 \
+  --member="serviceAccount:gke-sa@dev-project-786111.iam.gserviceaccount.com" \
+  --role="roles/container.admin" \
+  --condition None
+
+gcloud projects get-iam-policy dev-project-786111   \
+--flatten="bindings[].members" \
+--format='table(bindings.role)' \
+--filter="bindings.members:gke-sa@dev-project-786111.iam.gserviceaccount.com"
+
+```
+
+#### Kubectl & gcloud-auth-Plugin Script
+
+```
+# Install Kubectl
+!/bin/bash
+sudo apt update -y
+sudo apt upgrade -y
+sudo apt autoclean -y
+sudo apt install zip unzip wget net-tools vim nano htop tree telnet -y 
+
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
+echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl 
+
+# Install gcloud-auth-Plugin
+
+sudo apt-get update -y
+sudo apt-get install apt-transport-https ca-certificates gnupg curl -y
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+
+sudo apt-get update && sudo apt-get install google-cloud-cli -y
+
+grep -rhE ^deb /etc/apt/sources.list* | grep "cloud-sdk"
+
+
+sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin -y
+
+gke-gcloud-auth-plugin --version
+
+
+# https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke
+     
+
+```
+
+#### Kubecolor & Kubectl Alias
+
+```
+
+sudo wget https://github.com/hidetatz/kubecolor/releases/download/v0.0.25/kubecolor_0.0.25_Linux_x86_64.tar.gz
+sudo tar zxv -f kubecolor_0.0.25_Linux_x86_64.tar.gz
+
+echo "alias k=/home/aslam/" >> ~/.bashrc
+echo "alias k=/home/aslam/kubecolor" >> ~/.bashrc
+
+sudo rm -rf kubecolor_0.0.25_Linux_x86_64.tar.gz
+
+ alias k=/home/aslam/
+ alias k=/home/aslam/kubecolor     
+
+```
+
+#### Install Kubectx & Kubens
+
+```
+sudo snap install kubectx --classic
+
+kubectx
+
+```
+
+#### Create K8s-VM
+
+```
+gcloud compute instances create k8s-client1 \
+    --zone me-central1-a \
+    --image-family ubuntu-2204-lts \
+    --image-project ubuntu-os-cloud \
+    --machine-type e2-medium \
+    --boot-disk-size 20GB \
+    --boot-disk-type pd-balanced \
+    --subnet k8s-vpc-sub6-me-central1 \
+    --private-network-ip 172.22.4.10 \
+    --service-account gke-sa@dev-project-786111.iam.gserviceaccount.com \
+    --scopes=https://www.googleapis.com/auth/cloud-platform \
+    --metadata enable-oslogin=TRUE \
+    --metadata-from-file startup-script=$HOME/web-scripts/kube-script.sh \
+    --tags k8s-ssh-allow   
+
+```
+
+#### Connect GKE Cluster using GCP VM
 
 ```
 
@@ -184,6 +326,96 @@ gcloud container clusters get-credentials private-cluster1 --region us-central1 
 
 ```
 
+#### Create K8s-VM on US-West1
+
+```
+gcloud compute instances create k8s-client2 \
+    --zone us-west1-b \
+    --image-family ubuntu-2204-lts \
+    --image-project ubuntu-os-cloud \
+    --machine-type e2-medium \
+    --boot-disk-size 50GB \
+    --boot-disk-type pd-balanced \
+    --subnet k8s-vpc-sub4-us-west1 \
+    --private-network-ip 172.22.2.20 \
+    --service-account gke-sa@dev-project-786111.iam.gserviceaccount.com \
+    --scopes=https://www.googleapis.com/auth/cloud-platform \
+    --metadata enable-oslogin=TRUE \
+    --metadata-from-file startup-script=$HOME/web-scripts/kube-script.sh \
+    --tags k8s-ssh-allow 
+
+```
+
+#### Add master-authorized-networks  IPS
+
+```
+gcloud container clusters update private-cluster1 \
+    --region us-west1 \
+    --enable-master-authorized-networks \
+    --master-authorized-networks 172.22.4.10/32,172.22.2.20/32
+
+gcloud container clusters describe private-cluster2 --format "flattened(masterAuthorizedNetworksConfig.cidrBlocks[])" --region us-west1      
+
+```
+
+#### Connect GKE Cluster using GCP VM from Same Region US-West1
+
+```
+
+gcloud container clusters list
+
+gcloud container clusters get-credentials private-cluster2 --region us-west1 --project dev-project-786111 --internal-ip    
+
+```
+
+#### Deescribe Cluster Config File
+
+```
+
+gcloud container clusters list
+
+gcloud container clusters describe private-cluster2 \
+   --location=us-west1 \
+   --format="yaml(network, privateClusterConfig)"
+
+``` 
+
+ Note : without    --enable-master-global-access (Cluster only access from same region us-west1)
+ Cluster wont access from any other region because of disable --enable-master-global-access
+
+ masterGlobalAccessConfig: (thie setting is missing in privateClusterConfig)
+
+### For Other Regions to Connect Private Cluster
+
+ #### Update Private Cluster
+
+ ```
+ gcloud container clusters list
+
+ gcloud container clusters update private-cluster1 \
+    --location=us-west1 \
+    --enable-master-global-access 
+
+gcloud container clusters describe private-cluster1 \
+   --location=us-west1 \
+   --format="yaml(network, privateClusterConfig)"
+
+``` 
+
+Note : masterGlobalAccessConfig:
+    enabled: true
+
+ #### Connect GKE Cluster using GCP VM from Others Regions
+
+```
+
+gcloud container clusters list
+
+gcloud container clusters get-credentials private-cluster2 --region us-west1 --project dev-project-786111 --internal-ip    
+
+```   
+
+
 
 ### Delete Clusters
 
@@ -191,12 +423,29 @@ gcloud container clusters get-credentials private-cluster1 --region us-central1 
 gcloud container clusters list
 
 gcloud container clusters delete private-cluster1 --region us-central1
+```
+### Delete Client Vms
+
+```
+gcloud compute instances list
+
+gcloud compute instances delete k8s-clien1 --zone me-central1-a 
+gcloud compute instances delete k8s-client2 --zone us-west1-b
+
+```
+
+### Delete Service Account
+
+```
+gcloud iam service-accounts list
+
+gcloud iam service-accounts delete gke-sa@dev-project-786111.iam.gserviceaccount.com
 
 ```
 
 ### NatGW for Private Nodes in GKE:
 
-#### Cloud NAT for Region 1
+#### Cloud NAT for Region US-Central1
 
 ```
 gcloud compute addresses create natgw-gke-pip-us-central1  \
@@ -229,7 +478,7 @@ gcloud compute routers nats create gke-natgw-us-central1 \
     --router gke-nat-router-us-central1 \
     --region us-central1 \
     --nat-external-ip-pool natgw-gke-pip-us-central1 \
-    --nat-custom-subnet-ip-ranges k8s-vpc-subnet-us-central1 \
+    --nat-custom-subnet-ip-ranges k8s-sub1-us-central1 \
     --min-ports-per-vm 128 \
     --max-ports-per-vm 512 \
     --enable-logging
