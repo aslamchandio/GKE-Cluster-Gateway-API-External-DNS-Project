@@ -105,7 +105,7 @@ gcloud compute routes list \
 
 ```
 
-###  Subnets For Masters Node
+###  Subnet For Control PLan 
 
 ```
 gcloud compute networks subnets create k8s-master-sub1-us-central1 \
