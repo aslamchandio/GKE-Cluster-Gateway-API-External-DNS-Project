@@ -20,7 +20,7 @@ spec:
       containers:
       # List
       - name: myapp1-container
-        image: aslam24/nginx-web-myapp1:v1
+        image: aslam24/nginx-web-pathrouting:v1
         ports:
         - containerPort: 80
         resources:

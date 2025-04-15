@@ -10,4 +10,4 @@ spec:
   rules:
   - backendRefs:
     - name: myapp3-service
-      port: 80               
+      port: 80

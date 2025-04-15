@@ -2,25 +2,25 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   #Dictionary
-  name: myapp3-deployment
+  name: myapp2-deployment
 spec:
   # Dictionary
   replicas: 2
   selector:
     matchLabels:
-      app: myapp3
+      app: myapp2
   template:
     metadata:
       # Dictionary
-      name: myapp3-pod
+      name: myapp2-pod
       labels:
         # Dictionary
-        app: myapp3 # Key value pairs
+        app: myapp2 # Key value pairs
     spec:
       containers:
       # List
-      - name: myapp3-container
-        image: aslam24/nginx-web-myapp1:v3
+      - name: myapp2-container
+        image: aslam24/nginx-web-pathrouting:v2
         ports:
         - containerPort: 80
         resources:

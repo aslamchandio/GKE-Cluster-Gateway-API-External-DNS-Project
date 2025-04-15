@@ -8,7 +8,7 @@ spec:
     name: mygateway1-regional
     sectionName: https
   hostnames:
-  - "web2.chandiolab.site"
+  - "web2.cloudaxt.online"
   rules:
   - matches:
     - path:

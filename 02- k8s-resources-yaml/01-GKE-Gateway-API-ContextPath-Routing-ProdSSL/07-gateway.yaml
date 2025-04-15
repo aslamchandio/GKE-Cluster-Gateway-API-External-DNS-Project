@@ -14,7 +14,7 @@ spec:
     tls:
       mode: Terminate
       options:
-        networking.gke.io/cert-manager-certs: app1-us-central1-cert
+        networking.gke.io/cert-manager-certs: my-regional-certificate
   addresses:
   - type: NamedAddress
     value: my-regional-pip
