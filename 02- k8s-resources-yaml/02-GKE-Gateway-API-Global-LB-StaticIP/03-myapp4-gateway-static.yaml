@@ -1,0 +1,20 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: mygateway1-global-staticip
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  addresses:
+  - type: NamedAddress
+    value: my-global-pip
+
+# gcloud compute addresses create my-global-pip --global
+
+# gcloud compute addresses list
+# gcloud compute addresses describe my-global-pip --global
+
+# gcloud compute addresses delete my-global-pip --global

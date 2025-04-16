@@ -43,6 +43,17 @@ gcloud compute addresses list
 gcloud compute addresses describe my-regional-pip --region us-central1
 ```
 
+### Step-02-01: Create Global Static IP
+```t
+# Create Global Load Balancer IP
+gcloud compute addresses create my-global-pip --global
+
+
+# List IP Addresss    
+gcloud compute addresses list
+gcloud compute addresses describe my-global-pip --global
+```
+
 ### Step-02-02: Create Google  SSL certificates
 ```t
 # Create DNS Authorization 
